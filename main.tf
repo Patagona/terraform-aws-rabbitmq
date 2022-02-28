@@ -1,17 +1,13 @@
+module "ami_helper" {
+  source = "recarnot/ami-helper/aws"
+  os     = module.ami_helper.AMAZON_LINUX_2
+}
+
 data "aws_vpc" "vpc" {
   id = var.vpc_id
 }
 
 data "aws_region" "current" {
-}
-
-data "aws_ami_ids" "ami" {
-  owners = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-2022*-x86_64-gp2"]
-  }
 }
 
 locals {
@@ -48,17 +44,52 @@ data "template_file" "cloud-init" {
   template = file("${path.module}/cloud-init.yaml")
 
   vars = {
-    sync_node_count = 3
-    asg_name        = local.cluster_name
-    region          = data.aws_region.current.name
-    admin_password  = random_string.admin_password.result
-    rabbit_password = random_string.rabbit_password.result
-    secret_cookie   = random_string.secret_cookie.result
-    message_timeout = 3 * 24 * 60 * 60 * 1000 # 3 days
+    sync_node_count  = 3
+    asg_name         = local.cluster_name
+    region           = data.aws_region.current.name
+    admin_password   = random_string.admin_password.result
+    rabbit_password  = random_string.rabbit_password.result
+    secret_cookie    = random_string.secret_cookie.result
+    message_timeout  = 3 * 24 * 60 * 60 * 1000 # 3 days
     rabbitmq_version = var.rabbitmq_version
+    access_key       = aws_iam_access_key.rabbit_user.id
+    secret           = aws_iam_access_key.rabbit_user.secret
   }
 }
 
+resource "aws_iam_user" "rabbit_user" {
+  name = "${var.name}_user"
+  tags = {
+    service = var.service_tag
+  }
+}
+
+resource "aws_iam_access_key" "rabbit_user" {
+  user = aws_iam_user.rabbit_user.name
+}
+
+resource "aws_iam_user_policy" "rabbit_user" {
+  name = var.name
+  user = aws_iam_user.rabbit_user.name
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "autoscaling:DescribeAutoScalingInstances",
+        "ec2:DescribeInstances"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+
+
+}
 resource "aws_iam_role" "role" {
   name               = local.cluster_name
   assume_role_policy = data.aws_iam_policy_document.policy_doc.json
@@ -106,8 +137,8 @@ resource "aws_security_group" "rabbitmq_elb" {
   }
 
   tags = {
-    Name = "rabbitmq ${var.name} ELB"
-    resource = var.resource_tag
+    Name    = "rabbitmq ${var.name} ELB"
+    service = var.service_tag
   }
 }
 
@@ -124,24 +155,24 @@ resource "aws_security_group" "rabbitmq_nodes" {
   }
 
   ingress {
-    protocol        = "tcp"
-    from_port       = 5672
-    to_port         = 5672
+    protocol    = "tcp"
+    from_port   = 5672
+    to_port     = 5672
     cidr_blocks = ["10.0.0.0/16"]
   }
 
   ingress {
-    protocol        = "tcp"
-    from_port       = 15672
-    to_port         = 15672
+    protocol    = "tcp"
+    from_port   = 15672
+    to_port     = 15672
     cidr_blocks = ["10.0.0.0/16"]
   }
-  
+
   ingress {
-    protocol = "tcp"
-    from_port = 22
-    to_port = 22
-    cidr_blocks=["10.0.0.0/8"]
+    protocol    = "tcp"
+    from_port   = 22
+    to_port     = 22
+    cidr_blocks = ["10.0.0.0/8"]
   }
 
   egress {
@@ -155,13 +186,14 @@ resource "aws_security_group" "rabbitmq_nodes" {
   }
 
   tags = {
-    Name = "rabbitmq ${var.name} nodes"
+    Name    = "rabbitmq ${var.name} nodes",
+    service = var.service_tag
   }
 }
 
 resource "aws_launch_configuration" "rabbitmq" {
-  name                 = local.cluster_name
-  image_id             = data.aws_ami_ids.ami.ids[0]
+  name_prefix          = local.cluster_name
+  image_id             = module.ami_helper.ami_id
   instance_type        = var.instance_type
   key_name             = var.ssh_key_name
   security_groups      = concat([aws_security_group.rabbitmq_nodes.id], var.nodes_additional_security_group_ids)
@@ -192,11 +224,18 @@ resource "aws_autoscaling_group" "rabbitmq" {
   load_balancers            = [aws_elb.elb.name]
   vpc_zone_identifier       = var.subnet_ids
 
-  tag {
-    key                 = "Name"
-    value               = local.cluster_name
-    propagate_at_launch = true
-  }
+  tags = [
+    {
+      key                 = "Name"
+      value               = local.cluster_name
+      propagate_at_launch = true
+    },
+    {
+      key                 = "service"
+      value               = var.service_tag
+      propagate_at_launch = true
+    }
+  ]
 }
 
 resource "aws_elb" "elb" {
@@ -211,9 +250,9 @@ resource "aws_elb" "elb" {
 
   listener {
     instance_port     = 15672
-    instance_protocol = "http"
-    lb_port           = 80
-    lb_protocol       = "http"
+    instance_protocol = "tcp"
+    lb_port           = 15672
+    lb_protocol       = "tcp"
   }
 
   health_check {
@@ -230,6 +269,7 @@ resource "aws_elb" "elb" {
   security_groups = concat([aws_security_group.rabbitmq_elb.id], var.elb_additional_security_group_ids)
 
   tags = {
-    Name = local.cluster_name
+    Name    = local.cluster_name
+    service = var.service_tag
   }
 }

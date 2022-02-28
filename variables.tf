@@ -58,5 +58,5 @@ variable "rabbitmq_version" {
   default = "3.9.12-management"
 }
 
-variable "resource_tag" {
+variable "service_tag" {
 }
