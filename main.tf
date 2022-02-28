@@ -10,12 +10,12 @@ data "aws_ami_ids" "ami" {
 
   filter {
     name   = "name"
-    values = ["amzn-ami-hvm-2017*-gp2"]
+    values = ["amzn2-ami-hvm-*-2022*-x86_64-gp2"]
   }
 }
 
 locals {
-  cluster_name = "rabbitmq-${var.name}"
+  cluster_name = "rbt-${var.name}"
 }
 
 resource "random_string" "admin_password" {
@@ -55,6 +55,7 @@ data "template_file" "cloud-init" {
     rabbit_password = random_string.rabbit_password.result
     secret_cookie   = random_string.secret_cookie.result
     message_timeout = 3 * 24 * 60 * 60 * 1000 # 3 days
+    rabbitmq_version = var.rabbitmq_version
   }
 }
 
@@ -93,7 +94,7 @@ resource "aws_iam_instance_profile" "profile" {
 }
 
 resource "aws_security_group" "rabbitmq_elb" {
-  name        = "rabbitmq_elb-${var.name}"
+  name        = "elb-${var.name}"
   vpc_id      = var.vpc_id
   description = "Security Group for the rabbitmq elb"
 
@@ -106,6 +107,7 @@ resource "aws_security_group" "rabbitmq_elb" {
 
   tags = {
     Name = "rabbitmq ${var.name} ELB"
+    resource = var.resource_tag
   }
 }
 
@@ -125,14 +127,21 @@ resource "aws_security_group" "rabbitmq_nodes" {
     protocol        = "tcp"
     from_port       = 5672
     to_port         = 5672
-    security_groups = [aws_security_group.rabbitmq_elb.id]
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   ingress {
     protocol        = "tcp"
     from_port       = 15672
     to_port         = 15672
-    security_groups = [aws_security_group.rabbitmq_elb.id]
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+  
+  ingress {
+    protocol = "tcp"
+    from_port = 22
+    to_port = 22
+    cidr_blocks=["10.0.0.0/8"]
   }
 
   egress {
