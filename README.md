@@ -1,10 +1,5 @@
 # Dead simple Terraform configuration for creating RabbitMQ cluster on AWS.
 
-| Branch | Build status                                                                                                                                                      |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| master | [![Build Status](https://travis-ci.org/ulamlabs/terraform-aws-rabbitmq.svg?branch=master)](https://travis-ci.org/ulamlabs/terraform-aws-rabbitmq) |
-
-
 ## What it does ?
 
 1. Uses [official](https://hub.docker.com/_/rabbitmq/) RabbitMQ docker image.
@@ -13,34 +8,30 @@
 1. Makes sure nodes can talk to each other and create cluster
 1. Make sure new nodes always join the cluster
 1. Configures `/` vhost queues in High Available (Mirrored) mode with automatic synchronization (`"ha-mode":"all", "ha-sync-mode":"3"`)
-
-
-<p align="center">
-<img src=".github/chart2.png" width="600">
-</p>
+1. uses the aws peer discorvery for cluster creation
+1. removes old nodes from the cluster and rebalances quorum queues when a new node joins the cluster
+1. the names of the various resources is formed by ${name_prefix}-${resource_abreviation}-${region}-${name_postfix}, thereby allowing you to conform to the [naming scheme](https://stepan.wtf/cloud-naming-convention/). The prefix should contain prefix, project and env. The postfix should contain description and suffix.
 
 
 ## How to use it ?
-Copy and paste into your Terraform configuration:
+The following configuration options exist:
+
 ```
 module "rabbitmq" {
-  source                            = "ulamlabs/rabbitmq/aws"
-  version                           = "3.0.0"
-  vpc_id                            = var.vpc_id
-  ssh_key_name                      = var.ssh_key_name
-  subnet_ids                        = var.subnet_ids
-  elb_additional_security_group_ids = var.cluster_security_group_id
-  min_size                          = "3"
-  max_size                          = "3"
-  desired_size                      = "3"
+  name_prefix                       = ""
+  name_postfix                      = ""
+  source                            = "github.com/Patagona/terraform-aws-rabbitmq?ref=001055c"
+  vpc_id                            = ""
+  ssh_key_name                      = ""
+  subnet_ids                        = [""]
+  elb_additional_security_group_ids = [""]
+  size                              = "3"
+  service_tag                       = ""
+  instance_type                     = "t2.micro"
+  rabbitmq_version                  = "3.9.13-management"
+  instance_volume_type              = "gp3"
+  instance_volume_size              = "10"
+  instance_volume_iops              = "3000"
+  instance_volume_throughput        = "125"
 }
 ```
-
-then run `terraform init`, `terraform plan` and `terraform apply`.
-
-Are 3 node not enough ? Update sizes to `5` and run `terraform apply` again,
-it will update Autoscaling Group and add `2` nodes more. Dead simple.
-
-Node becomes unresponsive ? Autoscaling group and ELB Health Checks will automatically replace it with new one, without data loss.
-
-Note: The VPC must have `enableDnsHostnames` = `true` and `enableDnsSupport` = `true` for the private DNS names to be resolvable for the nodes to connect to each other.   

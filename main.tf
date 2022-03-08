@@ -3,6 +3,7 @@ module "ami_helper" {
   os     = module.ami_helper.AMAZON_LINUX_2
 }
 
+
 data "aws_vpc" "vpc" {
   id = var.vpc_id
 }
@@ -11,15 +12,10 @@ data "aws_region" "current" {
 }
 
 locals {
-  cluster_name = "rbt-${var.name}"
+  region       = replace(data.aws_region.current.name, "-", "")
+  name_postfix = "${local.region}-${var.name_postfix}"
 }
-
 resource "random_string" "admin_password" {
-  length  = 32
-  special = false
-}
-
-resource "random_string" "rabbit_password" {
   length  = 32
   special = false
 }
@@ -45,10 +41,8 @@ data "template_file" "cloud-init" {
 
   vars = {
     sync_node_count  = 3
-    asg_name         = local.cluster_name
     region           = data.aws_region.current.name
     admin_password   = random_string.admin_password.result
-    rabbit_password  = random_string.rabbit_password.result
     secret_cookie    = random_string.secret_cookie.result
     message_timeout  = 3 * 24 * 60 * 60 * 1000 # 3 days
     rabbitmq_version = var.rabbitmq_version
@@ -58,7 +52,7 @@ data "template_file" "cloud-init" {
 }
 
 resource "aws_iam_user" "rabbit_user" {
-  name = "${var.name}_user"
+  name = "${var.name_prefix}-usr-${local.name_postfix}"
   tags = {
     service = var.service_tag
   }
@@ -69,7 +63,7 @@ resource "aws_iam_access_key" "rabbit_user" {
 }
 
 resource "aws_iam_user_policy" "rabbit_user" {
-  name = var.name
+  name = "${var.name_prefix}-iup-${local.name_postfix}"
   user = aws_iam_user.rabbit_user.name
 
   policy = <<EOF
@@ -91,12 +85,12 @@ EOF
 
 }
 resource "aws_iam_role" "role" {
-  name               = local.cluster_name
+  name               = "${var.name_prefix}-irl-${local.name_postfix}"
   assume_role_policy = data.aws_iam_policy_document.policy_doc.json
 }
 
 resource "aws_iam_role_policy" "policy" {
-  name = local.cluster_name
+  name = "${var.name_prefix}-irp-${local.name_postfix}"
   role = aws_iam_role.role.id
 
   policy = <<EOF
@@ -120,12 +114,12 @@ EOF
 }
 
 resource "aws_iam_instance_profile" "profile" {
-  name_prefix = local.cluster_name
+  name_prefix = "${var.name_prefix}-iip-${local.name_postfix}"
   role        = aws_iam_role.role.name
 }
 
 resource "aws_security_group" "rabbitmq_elb" {
-  name        = "elb-${var.name}"
+  name        = "${var.name_prefix}-elb-${local.name_postfix}"
   vpc_id      = var.vpc_id
   description = "Security Group for the rabbitmq elb"
 
@@ -137,13 +131,13 @@ resource "aws_security_group" "rabbitmq_elb" {
   }
 
   tags = {
-    Name    = "rabbitmq ${var.name} ELB"
+    Name    = "${var.name_prefix}-elb-${local.name_postfix}"
     service = var.service_tag
   }
 }
 
 resource "aws_security_group" "rabbitmq_nodes" {
-  name        = "${local.cluster_name}-nodes"
+  name        = "${var.name_prefix}-scg-${local.name_postfix}"
   vpc_id      = var.vpc_id
   description = "Security Group for the rabbitmq nodes"
 
@@ -186,13 +180,13 @@ resource "aws_security_group" "rabbitmq_nodes" {
   }
 
   tags = {
-    Name    = "rabbitmq ${var.name} nodes",
+    Name    = "${var.name_prefix}-scg-${local.name_postfix}",
     service = var.service_tag
   }
 }
 
 resource "aws_launch_configuration" "rabbitmq" {
-  name_prefix          = local.cluster_name
+  name_prefix          = "${var.name_prefix}-lcf-${local.name_postfix}"
   image_id             = module.ami_helper.ami_id
   instance_type        = var.instance_type
   key_name             = var.ssh_key_name
@@ -204,6 +198,7 @@ resource "aws_launch_configuration" "rabbitmq" {
     volume_type           = var.instance_volume_type
     volume_size           = var.instance_volume_size
     iops                  = var.instance_volume_iops
+    throughput            = var.instance_volume_throughput
     delete_on_termination = true
   }
 
@@ -213,10 +208,10 @@ resource "aws_launch_configuration" "rabbitmq" {
 }
 
 resource "aws_autoscaling_group" "rabbitmq" {
-  name                      = local.cluster_name
-  min_size                  = var.min_size
-  desired_capacity          = var.desired_size
-  max_size                  = var.max_size
+  name                      = "${var.name_prefix}-asg-${local.name_postfix}"
+  min_size                  = var.size
+  desired_capacity          = var.size
+  max_size                  = var.size
   health_check_grace_period = 300
   health_check_type         = "ELB"
   force_delete              = true
@@ -227,7 +222,7 @@ resource "aws_autoscaling_group" "rabbitmq" {
   tags = [
     {
       key                 = "Name"
-      value               = local.cluster_name
+      value               = "${var.name_prefix}-asg-${local.name_postfix}"
       propagate_at_launch = true
     },
     {
@@ -239,7 +234,7 @@ resource "aws_autoscaling_group" "rabbitmq" {
 }
 
 resource "aws_elb" "elb" {
-  name = "${local.cluster_name}-elb"
+  name = "${var.name_prefix}-elb-${local.name_postfix}"
 
   listener {
     instance_port     = 5672
@@ -269,7 +264,7 @@ resource "aws_elb" "elb" {
   security_groups = concat([aws_security_group.rabbitmq_elb.id], var.elb_additional_security_group_ids)
 
   tags = {
-    Name    = local.cluster_name
+    Name    = "${var.name_prefix}-elb-${local.name_postfix}"
     service = var.service_tag
   }
 }

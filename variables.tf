@@ -4,23 +4,17 @@ variable "vpc_id" {
 variable "ssh_key_name" {
 }
 
-variable "name" {
-  default = "main"
+variable "name_prefix" {
+  description = "The full name of the created resources will be built as follows: {prefix}_{resource}_{postfix}"
 }
 
-variable "min_size" {
-  description = "Minimum number of RabbitMQ nodes"
-  default     = 2
+variable "name_postfix" {
+  description = "The full name of the created resources will be built as follows: {prefix}_{resource}_{postfix}"
 }
 
-variable "desired_size" {
-  description = "Desired number of RabbitMQ nodes"
-  default     = 2
-}
-
-variable "max_size" {
-  description = "Maximum number of RabbitMQ nodes"
-  default     = 2
+variable "size" {
+  description = "Number of RabbitMQ nodes"
+  default     = 3
 }
 
 variable "subnet_ids" {
@@ -51,6 +45,9 @@ variable "instance_volume_size" {
 }
 
 variable "instance_volume_iops" {
+  default = "0"
+}
+variable "instance_volume_throughput" {
   default = "0"
 }
 
