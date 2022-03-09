@@ -48,6 +48,7 @@ data "template_file" "cloud-init" {
     rabbitmq_version = var.rabbitmq_version
     access_key       = aws_iam_access_key.rabbit_user.id
     secret           = aws_iam_access_key.rabbit_user.secret
+    metric_host      = var.metric_host
   }
 }
 

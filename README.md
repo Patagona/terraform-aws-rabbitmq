@@ -3,10 +3,7 @@
 ## What it does ?
 
 1. Uses [official](https://hub.docker.com/_/rabbitmq/) RabbitMQ docker image.
-1. Creates `N` nodes in `M` subnets
 1. Creates Autoscaling Group and ELB to load balance nodes
-1. Makes sure nodes can talk to each other and create cluster
-1. Make sure new nodes always join the cluster
 1. Configures `/` vhost queues in High Available (Mirrored) mode with automatic synchronization (`"ha-mode":"all", "ha-sync-mode":"3"`)
 1. uses the aws peer discorvery for cluster creation
 1. removes old nodes from the cluster and rebalances quorum queues when a new node joins the cluster

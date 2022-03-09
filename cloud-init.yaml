@@ -54,20 +54,119 @@ write_files:
         
         docker exec rabbitmq rabbitmq-queues grow rabbit@$(echo $HOSTNAME | cut -d. -f1) all
         
-  
+  - path: /root/docker-compose.yml
+    content: |
+        version: '3.4'
+        services:
+          metricbeat:
+            network_mode: "host"
+            image: 'docker.elastic.co/beats/metricbeat:7.17.1'
+            container_name: metricbeat
+            volumes:
+              - ./metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
+              - /var/run/docker.sock:/var/run/docker.sock:ro
+              - /sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro
+              - /proc:/hostfs/proc:ro
+              - /:/hostfs:ro
+            command: metricbeat -e -strict.perms=false
+            depends_on:
+              - rabbitmq
+          rabbitmq:
+            image: rabbitmq:${rabbitmq_version}
+            container_name: rabbitmq
+            ports:
+              - 15672:15672
+              - 5672:5672
+              - 25672:25672
+            hostname: $${HOSTNAME}
+            volumes:
+              - type: bind
+                source: /root/data/
+                target: /var/lib/rabbitmq
+              - type: bind
+                source: /root/conf/
+                target: /etc/rabbitmq 
+  - path: /root/metricbeat.yml
+    content: |
+        metricbeat.modules:
+        - module: system
+          period: 1m
+          metricsets:
+            - cpu
+            - load
+            - memory
+            - network
+            - process
+            - process_summary
+            #- core
+            #- diskio
+            #- socket
+          process.include_top_n:
+            by_cpu: 5      # include top 5 processes by CPU
+            by_memory: 5   # include top 5 processes by memory
+
+        - module: system
+          period: 5m
+          metricsets:
+            - filesystem
+            - fsstat
+          filesystem.ignore_types:
+            - rootfs
+            - ramfs
+            - bdev
+            - proc
+            - cpuset
+            - cgroup
+            - cgroup2
+            - tmpfs
+            - devtmpfs
+            - debugfs
+            - tracefs
+            - securityfs
+            - sockfs
+            - bpf
+            - pipefs
+            - hugetlbfs
+            - devpts
+            - pstore
+            - mqueue
+            - dax
+            - binfmt_misc
+            - overlay
+          processors:
+          - drop_event.when.regexp:
+              system.filesystem.mount_point: '^/(sys|cgroup|proc|dev|etc|host|lib)($|/)'
+
+        - module: system
+          period: 15m
+          metricsets:
+            - uptime
+        - module: rabbitmq
+          metricsets:  ["node"]
+          enabled: true
+          period: 5m
+          hosts: ["rabbitmq:15672"]
+          username: admin
+          password: ${admin_password}
+
+        output.elasticsearch:
+          hosts: ["${metric_host}"]
+
   - path: /root/data/.erlang.cookie
     content: ${secret_cookie}
 runcmd:
   - yum update -y
   - amazon-linux-extras install docker
   - yum install -y docker jq
+  - curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/bin/docker-compose
+  - chmod +x /usr/bin/docker-compose
   - systemctl enable docker
   - service docker start
   - chkconfig docker on
   - usermod -a -G docker ec2-user
+  - echo HOSTNAME=$${HOSTNAME} > /root/rabbit.env
   - chmod 600 /root/data/.erlang.cookie
-  - docker volume create --opt type=none --opt o=bind --opt device=/root/data --driver=local   erlang_cookie
-  - docker run -d --name rabbitmq --hostname $HOSTNAME -p 4369:4369 -p 5672:5672 -p 15672:15672 -p 25672:25672 -v erlang_cookie:/var/lib/rabbitmq -v /root/conf/:/etc/rabbitmq -v /root/bin:/tmp/bin rabbitmq:${rabbitmq_version}
+  - docker-compose -f /root/docker-compose.yml --env-file /root/rabbit.env up -d 
   - sleep 60
   - bash /root/configure.sh
   - bash /root/remove_old_nodes.sh

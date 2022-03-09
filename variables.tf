@@ -57,3 +57,7 @@ variable "rabbitmq_version" {
 
 variable "service_tag" {
 }
+
+variable "metric_host" {
+
+}
