@@ -75,6 +75,7 @@ write_files:
             depends_on:
               - rabbitmq
           rabbitmq:
+            network_mode: "host"
             image: rabbitmq:${rabbitmq_version}
             container_name: rabbitmq
             ports:
@@ -88,7 +89,7 @@ write_files:
                 target: /var/lib/rabbitmq
               - type: bind
                 source: /root/conf/
-                target: /etc/rabbitmq 
+                target: /etc/rabbitmq
   - path: /root/metricbeat.yml
     content: |
         metricbeat.modules:
