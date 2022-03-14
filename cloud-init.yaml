@@ -60,7 +60,7 @@ write_files:
         services:
           metricbeat:
             network_mode: "host"
-            image: 'docker.elastic.co/beats/metricbeat:7.17.1'
+            image: docker.elastic.co/beats/metricbeat:${metricbeat_version}
             container_name: metricbeat
             volumes:
               - ./metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
@@ -145,13 +145,14 @@ write_files:
           metricsets:  ["node"]
           enabled: true
           period: 5m
-          hosts: ["rabbitmq:15672"]
+          hosts: ["localhost:15672"]
           username: admin
           password: ${admin_password}
 
         output.elasticsearch:
           hosts: ["${metric_host}"]
-
+        setup.ilm.enabled: false
+  
   - path: /root/data/.erlang.cookie
     content: ${secret_cookie}
 runcmd:

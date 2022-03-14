@@ -59,5 +59,8 @@ variable "service_tag" {
 }
 
 variable "metric_host" {
+}
 
+variable "metricbeat_version" {
+  default = "7.17.1"
 }

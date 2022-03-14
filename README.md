@@ -24,11 +24,13 @@ module "rabbitmq" {
   elb_additional_security_group_ids = [""]
   size                              = "3"
   service_tag                       = ""
-  instance_type                     = "t2.micro"
+  instance_type                     = "t3a.micro"
   rabbitmq_version                  = "3.9.13-management"
   instance_volume_type              = "gp3"
   instance_volume_size              = "10"
   instance_volume_iops              = "3000"
   instance_volume_throughput        = "125"
+  metric_host                       = "" # the hostname, where metrbicbeat publishes metrics to
+  metricbeat_version                = "7.17.1" # defaults to "7.17.1"
 }
 ```
