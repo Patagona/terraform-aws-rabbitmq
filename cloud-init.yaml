@@ -10,6 +10,9 @@ write_files:
           cluster_formation.aws.access_key_id = ${access_key}
           cluster_formation.aws.secret_key = ${secret}
           cluster_formation.aws.use_autoscaling_group = true
+          
+          cluster_formation.discovery_retry_limit = 20
+          cluster_formation.discovery_retry_interval = 1000
   
   - path: /root/remove_old_nodes.sh
     content: |
@@ -168,7 +171,7 @@ runcmd:
   - echo HOSTNAME=$${HOSTNAME} > /root/rabbit.env
   - chmod 600 /root/data/.erlang.cookie
   - docker-compose -f /root/docker-compose.yml --env-file /root/rabbit.env up -d 
-  - sleep 60
+  - sleep 120
   - bash /root/configure.sh
   - bash /root/remove_old_nodes.sh
   - bash /root/rebalance_quorum_queues.sh
