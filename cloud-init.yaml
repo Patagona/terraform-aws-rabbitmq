@@ -161,18 +161,20 @@ write_files:
     content: ${secret_cookie}
 runcmd:
   - yum update -y
-  - amazon-linux-extras install docker
-  - yum install -y docker jq
-  - curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/bin/docker-compose
-  - chmod +x /usr/bin/docker-compose
-  - systemctl enable docker
-  - service docker start
-  - chkconfig docker on
-  - usermod -a -G docker ec2-user
-  - echo HOSTNAME=$${HOSTNAME} > /root/rabbit.env
-  - chmod 600 /root/data/.erlang.cookie
-  - docker-compose -f /root/docker-compose.yml --env-file /root/rabbit.env up -d 
-  - sleep 120
-  - bash /root/configure.sh
-  - bash /root/remove_old_nodes.sh
-  - bash /root/rebalance_quorum_queues.sh
+  - yum install python3
+  - nohup python3 -m http.server 15672 & # to prevent the node from being killed
+  #- amazon-linux-extras install docker
+  #- yum install -y docker jq
+  #- curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/bin/docker-compose
+  #- chmod +x /usr/bin/docker-compose
+  #- systemctl enable docker
+  #- service docker start
+  #- chkconfig docker on
+  #- usermod -a -G docker ec2-user
+  #- echo HOSTNAME=$${HOSTNAME} > /root/rabbit.env
+  #- chmod 600 /root/data/.erlang.cookie
+  #- docker-compose -f /root/docker-compose.yml --env-file /root/rabbit.env up -d 
+  #- sleep 120
+  #- bash /root/configure.sh
+  #- bash /root/remove_old_nodes.sh
+  #- bash /root/rebalance_quorum_queues.sh
