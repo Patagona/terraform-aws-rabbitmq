@@ -34,3 +34,11 @@ module "rabbitmq" {
   metricbeat_version                = "7.17.1" # defaults to "7.17.1"
 }
 ```
+# Salt core gains
+https://docs.saltproject.io/en/latest/ref/grains/all/salt.grains.core.html#salt.grains.core.hostname
+
+# Salt useful commands
+```
+salt-call --local grains.items
+salt-call --local grains.item host
+```
