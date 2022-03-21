@@ -51,16 +51,7 @@ variable "instance_volume_throughput" {
   default = "0"
 }
 
-variable "rabbitmq_version" {
-  default = "3.9.12-management"
-}
-
 variable "service_tag" {
 }
 
-variable "metric_host" {
-}
-
-variable "metricbeat_version" {
-  default = "7.17.1"
-}
+variable "git_key" {}

@@ -1,180 +1,27 @@
 #cloud-config
 write_files:
-  - path: /root/conf/enabled_plugins
+  - path: /root/.ssh/ansible_test
+    content: ${private_key}
+    permissions: '0600'
+  - path: /root/secrets.yml
     content: |
-        [rabbitmq_management, rabbitmq_peer_discovery_aws].
-  - path: /root/conf/rabbitmq.conf
+      rabbitmq:
+        password: ${admin_password}
+        cookie: ${secret_cookie}
+      access_key: ${access_key}
+      secret: ${secret}
+  - path: /root/run_playbook.sh
+    permissions: '0700'
     content: |
-          cluster_formation.peer_discovery_backend = aws
-          cluster_formation.aws.region = eu-west-1
-          cluster_formation.aws.access_key_id = ${access_key}
-          cluster_formation.aws.secret_key = ${secret}
-          cluster_formation.aws.use_autoscaling_group = true
-          
-          cluster_formation.discovery_retry_limit = 20
-          cluster_formation.discovery_retry_interval = 1000
-  
-  - path: /root/remove_old_nodes.sh
-    content: |
-        #!/usr/bin/env bash
-        nodes=($(egrep -o '[a-z0-9@-]+' <<< $(docker exec rabbitmq rabbitmqctl cluster_status --formatter json | jq .disk_nodes)))
-        running_nodes=($(egrep -o '[a-z0-9@-]+' <<< $(docker exec rabbitmq rabbitmqctl cluster_status --formatter json | jq .running_nodes)))
+      #!/usr/bin/bash
+      ansible-pull --private-key /root/.ssh/ansible_test --accept-host-key -e @/root/secrets.yml -U git@github.com:Patagona/backend-infrastructure.git -C ansible_test rabbitmq/ansible/playbook.yml
 
-        for node in $${nodes[@]}
-        do
-          match_count=0
-          for rnode in $${running_nodes[@]}
-          do
-            if [ "$${node}" == "$${rnode}" ]
-            then
-                match_count=1
-                break
-            fi
-          done
-          if [ $match_count == 1 ]
-            then
-                continue
-            else
-              docker exec rabbitmq rabbitmqctl forget_cluster_node $node
-            fi
-        done
-  
-  - path: /root/configure.sh
-    content: |
-        #!/usr/bin/env bash
-    
-        docker exec rabbitmq rabbitmqctl add_user admin ${admin_password}
-        docker exec rabbitmq rabbitmqctl set_user_tags admin administrator
-        docker exec rabbitmq rabbitmqctl add_vhost /
-        docker exec rabbitmq rabbitmqctl set_policy -p / ha-three "^" '{"ha-mode":"exactly", "ha-params":${sync_node_count}, "ha-sync-mode":"automatic", "message-ttl":${message_timeout}, "expires":${message_timeout}}'
-        docker exec rabbitmq rabbitmqctl set_permissions -p / admin ".*" ".*" ".*"
-        docker exec rabbitmq rabbitmqctl set_permissions -p / rabbit ".*" ".*" ".*"
-        docker exec rabbitmq rabbitmqctl delete_user guest
 
-  - path: /root/rebalance_quorum_queues.sh
-    content: |
-        #!/usr/bin/env bash
-        
-        docker exec rabbitmq rabbitmq-queues grow rabbit@$(echo $HOSTNAME | cut -d. -f1) all
-        
-  - path: /root/docker-compose.yml
-    content: |
-        version: '3.4'
-        services:
-          metricbeat:
-            network_mode: "host"
-            image: docker.elastic.co/beats/metricbeat:${metricbeat_version}
-            container_name: metricbeat
-            volumes:
-              - ./metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
-              - /var/run/docker.sock:/var/run/docker.sock:ro
-              - /sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro
-              - /proc:/hostfs/proc:ro
-              - /:/hostfs:ro
-            command: metricbeat -e -strict.perms=false
-            depends_on:
-              - rabbitmq
-          rabbitmq:
-            network_mode: "host"
-            image: rabbitmq:${rabbitmq_version}
-            container_name: rabbitmq
-            ports:
-              - 15672:15672
-              - 5672:5672
-              - 25672:25672
-            hostname: $${HOSTNAME}
-            volumes:
-              - type: bind
-                source: /root/data/
-                target: /var/lib/rabbitmq
-              - type: bind
-                source: /root/conf/
-                target: /etc/rabbitmq
-  - path: /root/metricbeat.yml
-    content: |
-        metricbeat.modules:
-        - module: system
-          period: 1m
-          metricsets:
-            - cpu
-            - load
-            - memory
-            - network
-            - process
-            - process_summary
-            #- core
-            #- diskio
-            #- socket
-          process.include_top_n:
-            by_cpu: 5      # include top 5 processes by CPU
-            by_memory: 5   # include top 5 processes by memory
-
-        - module: system
-          period: 5m
-          metricsets:
-            - filesystem
-            - fsstat
-          filesystem.ignore_types:
-            - rootfs
-            - ramfs
-            - bdev
-            - proc
-            - cpuset
-            - cgroup
-            - cgroup2
-            - tmpfs
-            - devtmpfs
-            - debugfs
-            - tracefs
-            - securityfs
-            - sockfs
-            - bpf
-            - pipefs
-            - hugetlbfs
-            - devpts
-            - pstore
-            - mqueue
-            - dax
-            - binfmt_misc
-            - overlay
-          processors:
-          - drop_event.when.regexp:
-              system.filesystem.mount_point: '^/(sys|cgroup|proc|dev|etc|host|lib)($|/)'
-
-        - module: system
-          period: 15m
-          metricsets:
-            - uptime
-        - module: rabbitmq
-          metricsets:  ["node"]
-          enabled: true
-          period: 5m
-          hosts: ["localhost:15672"]
-          username: admin
-          password: ${admin_password}
-
-        output.elasticsearch:
-          hosts: ["${metric_host}"]
-        setup.ilm.enabled: false
-  
-  - path: /root/data/.erlang.cookie
-    content: ${secret_cookie}
 runcmd:
   - yum update -y
-  - yum install python3
-  - nohup python3 -m http.server 15672 & # to prevent the node from being killed
-  #- amazon-linux-extras install docker
-  #- yum install -y docker jq
-  #- curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/bin/docker-compose
-  #- chmod +x /usr/bin/docker-compose
-  #- systemctl enable docker
-  #- service docker start
-  #- chkconfig docker on
-  #- usermod -a -G docker ec2-user
-  #- echo HOSTNAME=$${HOSTNAME} > /root/rabbit.env
-  #- chmod 600 /root/data/.erlang.cookie
-  #- docker-compose -f /root/docker-compose.yml --env-file /root/rabbit.env up -d 
-  #- sleep 120
-  #- bash /root/configure.sh
-  #- bash /root/remove_old_nodes.sh
-  #- bash /root/rebalance_quorum_queues.sh
+  - yum install python3 git -y
+  - pip3 install ansible
+  - echo "export PATH=$PATH:/usr/local/bin" >> /etc/profile
+  - export PATH=$PATH:/usr/local/bin
+  - ansible-galaxy collection install community.docker
+  - /root/run_playbook.sh

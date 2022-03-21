@@ -40,16 +40,11 @@ data "template_file" "cloud-init" {
   template = file("${path.module}/cloud-init.yaml")
 
   vars = {
-    sync_node_count    = 3
-    region             = data.aws_region.current.name
-    admin_password     = random_string.admin_password.result
-    secret_cookie      = random_string.secret_cookie.result
-    message_timeout    = 3 * 24 * 60 * 60 * 1000 # 3 days
-    rabbitmq_version   = var.rabbitmq_version
-    access_key         = aws_iam_access_key.rabbit_user.id
-    secret             = aws_iam_access_key.rabbit_user.secret
-    metric_host        = var.metric_host
-    metricbeat_version = var.metricbeat_version
+    admin_password = random_string.admin_password.result
+    secret_cookie  = random_string.secret_cookie.result
+    access_key     = aws_iam_access_key.rabbit_user.id
+    secret         = aws_iam_access_key.rabbit_user.secret
+    private_key    = "${jsonencode(var.git_key)}"
   }
 }
 
@@ -214,7 +209,7 @@ resource "aws_autoscaling_group" "rabbitmq" {
   min_size                  = var.size
   desired_capacity          = var.size
   max_size                  = var.size
-  health_check_grace_period = 300
+  health_check_grace_period = 600
   health_check_type         = "ELB"
   force_delete              = true
   launch_configuration      = aws_launch_configuration.rabbitmq.name
