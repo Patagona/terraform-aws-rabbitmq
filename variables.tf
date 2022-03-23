@@ -55,3 +55,6 @@ variable "service_tag" {
 }
 
 variable "git_key" {}
+variable "ansible_git_url" {}
+variable "ansible_git_branch" {}
+variable "ansible_playbook" {}

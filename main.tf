@@ -40,11 +40,14 @@ data "template_file" "cloud-init" {
   template = file("${path.module}/cloud-init.yaml")
 
   vars = {
-    admin_password = random_string.admin_password.result
-    secret_cookie  = random_string.secret_cookie.result
-    access_key     = aws_iam_access_key.rabbit_user.id
-    secret         = aws_iam_access_key.rabbit_user.secret
-    private_key    = "${jsonencode(var.git_key)}"
+    admin_password     = random_string.admin_password.result
+    secret_cookie      = random_string.secret_cookie.result
+    access_key         = aws_iam_access_key.rabbit_user.id
+    secret             = aws_iam_access_key.rabbit_user.secret
+    private_key        = "${jsonencode(var.git_key)}"
+    ansible_git_url    = var.ansible_git_url
+    ansible_git_branch = var.ansible_git_branch
+    ansible_playbook   = var.ansible_playbook
   }
 }
 

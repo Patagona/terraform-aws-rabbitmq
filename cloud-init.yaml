@@ -14,7 +14,7 @@ write_files:
     permissions: '0700'
     content: |
       #!/usr/bin/bash
-      ansible-pull --private-key /root/.ssh/ansible_test --accept-host-key -e @/root/secrets.yml -U git@github.com:Patagona/backend-infrastructure.git -C ansible_test rabbitmq/ansible/playbook.yml
+      ansible-pull --private-key /root/.ssh/ansible_test --accept-host-key -e @/root/secrets.yml -U ${ansible_git_url} -C ${ansible_git_branch} ${ansible_playbook}
 
 
 runcmd:
