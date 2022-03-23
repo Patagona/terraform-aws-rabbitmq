@@ -1,6 +1,6 @@
 install-docker-amz-linux-2:
   cmd.run:
-    - name: amazon-linux-extras install docker -y
+    - name: amazon-linux-extras install docker=stable -y
     - require_in:
       - docker-post-installation
 

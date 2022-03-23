@@ -1,0 +1,64 @@
+metricbeat.modules:
+- module: system
+  period: 1m
+  metricsets:
+    - cpu
+    - load
+    - memory
+    - network
+    - process
+    - process_summary
+    #- core
+    #- diskio
+    #- socket
+  process.include_top_n:
+    by_cpu: 5      # include top 5 processes by CPU
+    by_memory: 5   # include top 5 processes by memory
+- module: system
+  period: 5m
+  metricsets:
+    - filesystem
+    - fsstat
+  filesystem.ignore_types:
+    - rootfs
+    - ramfs
+    - bdev
+    - proc
+    - cpuset
+    - cgroup
+    - cgroup2
+    - tmpfs
+    - devtmpfs
+    - debugfs
+    - tracefs
+    - securityfs
+    - sockfs
+    - bpf
+    - pipefs
+    - hugetlbfs
+    - devpts
+    - pstore
+    - mqueue
+    - dax
+    - binfmt_misc
+    - overlay
+  processors:
+  - drop_event.when.regexp:
+      system.filesystem.mount_point: '^/(sys|cgroup|proc|dev|etc|host|lib)($|/)'
+- module: system
+  period: 15m
+  metricsets:
+  - uptime
+- module: rabbitmq
+  metricsets:  ["node"]
+  enabled: true
+  period: 5m
+  hosts: ["{{ grains['host'] }}:15672"]
+  username: {{ pillar.rabbitmq.username }}
+  password: {{ pillar.rabbitmq.password }}
+
+output.elasticsearch:
+  hosts: ["{{ pillar.metric.cluster.url }}"]
+
+setup.ilm.enabled: false
+setup.ilm.policy_name: "metricbeat-7.17.1"

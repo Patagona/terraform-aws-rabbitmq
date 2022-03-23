@@ -1,0 +1,31 @@
+version: '3.4'
+services:
+  metricbeat:
+    network_mode: "host"
+    image: docker.elastic.co/beats/metricbeat:{{ pillar.metricbeat.version }}
+    container_name: metricbeat
+    volumes:
+      - ./metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro
+      - /proc:/hostfs/proc:ro
+      - /:/hostfs:ro
+    command: metricbeat -e -strict.perms=false
+    depends_on:
+      - rabbitmq
+  rabbitmq:
+    # network_mode: "host"
+    image: rabbitmq:{{ pillar.rabbitmq.version }}
+    container_name: rabbitmq
+    ports:
+      - 15672:15672
+      - 5672:5672
+      - 25672:25672
+    hostname: {{ grains['host'] }}
+    # volumes:
+      # - type: bind
+        # source: /root/data/
+        # target: /var/lib/rabbitmq
+      # - type: bind
+        # source: /root/conf/
+        # target: /etc/rabbitmq
